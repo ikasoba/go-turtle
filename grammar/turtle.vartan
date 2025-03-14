@@ -1,0 +1,511 @@
+#name grammar;
+
+#prec (
+	#assign $double
+);
+
+turtle_doc
+	: statement turtle_doc #ast statement turtle_doc...
+	| statement
+	;
+
+statement
+	: directive
+	| triples dot #ast triples
+	| comment
+	;
+
+dot : '.' ;
+
+directive
+	: prefix_id
+	| base
+	| sparql_prefix
+	| sparql_base
+	;
+
+prefix_id
+	: directive_prefix pname_ns iriref dot #ast pname_ns iriref
+	;
+
+directive_prefix : '@prefix' ;
+
+base
+	: directive_base iriref dot #ast iriref
+	;
+
+directive_base : '@base' ;
+
+sparql_prefix
+	: directive_sparql_prefix pname_ns iriref #ast pname_ns iriref
+	;
+
+directive_sparql_prefix : 'PREFIX' ;
+
+sparql_base
+	: directive_sparql_base iriref #ast iriref
+	;
+
+directive_sparql_base : 'BASE' ;
+
+triples
+	: subject predicate_object_list
+	| blank_node_property_list predicate_object_list
+	| blank_node_property_list
+	| reified_triple predicate_object_list
+	| reified_triple
+	;
+
+predicate_object_list
+	: predicate_object_list_atom predicate_object_list_tail #ast predicate_object_list_atom predicate_object_list_tail...
+	| predicate_object_list_atom
+	;
+
+predicate_object_list_atom
+	: verb object_list
+	;
+
+predicate_object_list_tail
+	: symbol_semicolon predicate_object_list_atom predicate_object_list_tail #ast predicate_object_list_atom predicate_object_list_tail...
+	| symbol_semicolon predicate_object_list_tail #ast predicate_object_list_tail...
+	| symbol_semicolon predicate_object_list_atom
+	| symbol_semicolon
+	;
+
+object_list
+	: object annotation symbol_comma object_list #ast object annotation object_list...
+	| object symbol_comma object_list #ast object object_list...
+	| object annotation
+	| object
+	;
+
+symbol_semicolon : ';' ;
+
+symbol_comma : ',' ;
+
+verb
+	: predicate
+	| a
+	;
+
+a : 'a' ;
+
+subject
+	: iri
+	| blank_node
+	| collection
+	;
+
+predicate : iri ;
+
+object
+	: iri
+	| blank_node
+	| collection
+	| blank_node_property_list
+	| literal
+	| triple_term
+	| reified_triple
+	;
+
+literal
+	: rdf_literal
+	| numeric_literal
+	| boolean_literal
+	;
+
+blank_node_property_list
+	: bracket_open predicate_object_list bracket_close #ast predicate_object_list...
+	;
+
+collection
+	: collection_open collection_content collection_close
+	| collection_open collection_close
+	;
+
+collection_open : '(' ;
+
+collection_close : ')' ;
+
+collection_content
+	: object collection_content #ast object collection_content...
+	| object
+	;
+
+numeric_literal
+	: integer
+	| decimal
+	| double #prec $double
+	| digits
+	;
+
+rdf_literal
+	: string lang_dir
+	| string symbol_double_caret iri
+	| string
+	;
+
+symbol_double_caret : '^^' ;
+
+boolean_literal
+	: boolean_true
+	| boolean_false
+	;
+
+boolean_true : 'true' ;
+
+boolean_false : 'false' ;
+
+string
+	: string_literal_quote
+	| string_literal_single_quote
+	| string_literal_long_single_quote
+	| string_literal_long_quote
+	;
+
+iri
+	: iriref
+	| prefixed_name
+	;
+
+prefixed_name
+	: pname_ns
+	| pn_local
+	;
+
+blank_node
+	: blank_node_label
+	| anon
+	;
+
+reifier
+	: symbol_tilda iri
+	| symbol_tilda blank_node
+	| symbol_tilda
+	;
+	
+symbol_tilda : '~' ;
+
+reified_triple
+	: reified_triple_open rt_subject verb rt_object reifier reified_triple_close
+	| reified_triple_open rt_subject verb rt_object reified_triple_close
+	;
+
+reified_triple_open #push reified_triple : '<<' ;
+
+reified_triple_close #mode reified_triple_close : '>>' ;
+
+rt_subject
+	: iri
+	| blank_node
+	| reified_triple
+	;
+
+rt_object
+	: iri
+	| blank_node
+	| literal
+	| triple_term
+	| reified_triple
+	;
+
+triple_term
+	: triple_term_open tt_subject verb tt_object triple_term_close
+	;
+
+triple_term_open : '<<(' ;
+
+triple_term_close : ')>>' ;
+
+tt_subject
+	: iri
+	| blank_node
+	;
+
+tt_object
+	: iri
+	| blank_node
+	| literal
+	| triple_term
+	;
+
+annotation
+	: reifier annotation
+	| annotation_block annotation
+	| reifier
+	| annotation_block
+	;
+
+annotation_block
+	: annotation_block_open predicate_object_list annotation_block_close
+	;
+
+annotation_block_open : '{|' ;
+
+annotation_block_close : '|}' ;
+
+iriref
+	: iriref_open iriref_content iriref_close
+	| iriref_open iriref_close
+	;
+
+iriref_open #push iriref
+	: '<'
+	;
+
+iriref_close #mode iriref #pop
+	: '>'
+	;
+
+iriref_content
+	: iriref_char iriref_content #ast iriref_char iriref_content...
+	| uchar iriref_content #ast uchar iriref_content...
+	| iriref_char
+	| uchar
+	;
+
+iriref_char #mode iriref
+	: "[^\u{0000}-\u{0020}<>\"{}|^`\u{005c}]"
+	;
+
+pname_ns
+	: pn_prefix_with_colon
+	| symbol_colon
+	;
+
+symbol_colon : ':' ;
+
+blank_node_label
+	: blank_node_ns blank_node_label_a blank_node_label_b
+	| blank_node_ns blank_node_label_a
+	;
+
+blank_node_ns : '_:' ;
+
+blank_node_label_a
+	: pn_chars_u
+	| digit
+	;
+
+blank_node_label_b
+	: dot blank_node_label_b
+	| pn_chars blank_node_label_b
+	| pn_chars
+	;
+
+lang_dir : "@[a-zA-Z]+(-[a-zA-Z0-9]+)*(--[a-zA-Z]+)?" ;
+
+double
+	: plus_or_minus double_content
+	| double_content
+	;
+
+double_content
+	: digits dot digits exponent
+	| digits dot exponent
+	| dot digits exponent
+	| digits exponent
+	;
+	
+exponent : "[eE][+-]?[0-9]+" ;
+
+decimal
+	: plus_or_minus digits dot digits
+	| plus_or_minus dot digits
+	;
+
+integer
+	: plus_or_minus digits
+	;
+
+plus_or_minus
+	: symbol_plus
+	| symbol_minus
+	;
+
+symbol_plus : '+' ;
+
+symbol_minus : '-' ;
+
+string_literal_quote
+	: string_literal_quote_open string_literal_quote_content string_literal_quote_close
+	| string_literal_quote_open string_literal_quote_close
+	;
+
+string_literal_quote_content
+	: string_literal_quote_atom string_literal_quote_content #ast string_literal_quote_atom string_literal_quote_content...
+	| string_literal_quote_atom
+	;
+
+string_literal_quote_atom
+	: string_literal_quote_char
+	| string_literal_quote_echar
+	| string_literal_quote_uchar
+	;
+
+string_literal_quote_open #push string_literal_quote
+	: '"'
+	;
+
+string_literal_quote_char #mode string_literal_quote
+	: "[^\u{0022}\u{005c}\u{000a}\u{000d}]"
+	;
+
+string_literal_quote_echar #mode string_literal_quote
+	: "\\[tbnrf\"']"
+	;
+	
+string_literal_quote_uchar #mode string_literal_quote
+	: "\\u[0-9a-fA-F]{4}|\\u[0-9a-fA-F]{8}"
+	;
+
+string_literal_quote_close #mode string_literal_quote #pop
+	: '"'
+	;
+
+string_literal_single_quote
+	: string_literal_single_quote_open string_literal_single_quote_content string_literal_single_quote_close
+	| string_literal_single_quote_open string_literal_single_quote_close
+	;
+
+string_literal_single_quote_content
+	: string_literal_single_quote_atom string_literal_single_quote_content #ast string_literal_single_quote_atom string_literal_single_quote_content...
+	| string_literal_single_quote_atom
+	;
+
+string_literal_single_quote_atom
+	: string_literal_single_quote_char
+	| string_literal_single_quote_echar
+	| string_literal_single_quote_uchar
+	;
+
+string_literal_single_quote_open #push string_literal_single_quote
+	: "'"
+	;
+
+string_literal_single_quote_char #mode string_literal_single_quote
+	: "[^\u{0027}\u{005c}\u{000a}\u{000d}]"
+	;
+
+string_literal_single_quote_echar #mode string_literal_single_quote
+	: "\\[tbnrf\"']"
+	;
+	
+string_literal_single_quote_uchar #mode string_literal_single_quote
+	: "\\u[0-9a-fA-F]{4}|\\u[0-9a-fA-F]{8}"
+	;
+
+string_literal_single_quote_close #mode string_literal_single_quote #pop
+	: "'"
+	;
+
+echar
+	: "\\[tbnrf\"']"
+	;
+	
+uchar
+	: "\\u[0-9a-fA-F]{4}|\\u[0-9a-fA-F]{8}"
+	;
+
+string_literal_long_single_quote
+	: string_literal_long_single_quote_open string_literal_long_single_quote_content string_literal_long_single_quote_close
+	| string_literal_long_single_quote_open string_literal_long_single_quote_close
+	;
+
+string_literal_long_single_quote_open #push string_literal_long_single_quote
+	: "'''"
+	;
+
+string_literal_long_single_quote_close #mode string_literal_long_single_quote #pop
+	: "'''"
+	;
+
+string_literal_long_single_quote_content
+	: string_literal_long_single_quote_atom string_literal_long_single_quote_content #ast string_literal_long_single_quote_atom string_literal_long_single_quote_content...
+	;
+	
+string_literal_long_single_quote_atom
+	: string_literal_long_single_quote_esc string_literal_long_single_quote_char
+	| string_literal_long_single_quote_char
+	;
+
+string_literal_long_single_quote_esc #mode string_literal_long_single_quote
+	: "'|''"
+	;
+
+string_literal_long_single_quote_char
+	: string_literal_long_single_quote_char_regex
+	| echar
+	| uchar
+	;
+
+string_literal_long_single_quote_char_regex #mode string_literal_long_single_quote
+	: "[^'\u{005c}]"
+	;
+
+string_literal_long_quote
+	: string_literal_long_quote_open string_literal_long_quote_content string_literal_long_quote_close
+	| string_literal_long_quote_open string_literal_long_quote_close
+	;
+
+string_literal_long_quote_open #push string_literal_long_quote
+	: '"""'
+	;
+
+string_literal_long_quote_close #mode string_literal_long_quote #pop
+	: '"""'
+	;
+
+string_literal_long_quote_content
+	: string_literal_long_quote_atom string_literal_long_quote_content #ast string_literal_long_quote_atom string_literal_long_quote_content...
+	;
+	
+string_literal_long_quote_atom
+	: string_literal_long_quote_esc string_literal_long_quote_char
+	| string_literal_long_quote_char
+	;
+
+string_literal_long_quote_esc #mode string_literal_long_quote
+	: "\"|\"\""
+	;
+
+string_literal_long_quote_char
+	: string_literal_long_quote_char_regex
+	| echar
+	| uchar
+	;
+
+string_literal_long_quote_char_regex #mode string_literal_long_quote
+	: "[^\"\u{005c}]"
+	;
+	
+ws #skip
+	: "[\u{0020}\u{0009}\u{000d}\u{000a}]+"
+	;
+
+comment
+	: "#[^\u{000d}\u{000a}]*"
+	;
+
+anon
+	: bracket_open bracket_close
+	;
+
+bracket_open : '[' ;
+
+bracket_close : ']' ;
+
+pn_chars_u : "[a-zA-Z_]" ;
+
+pn_chars : "[-a-zA-Z_0-9\u{00b7}\u{0300}-\u{036f}\u{203f}-\u{2040}]" ;
+
+pn_prefix_with_colon : "[a-zA-Z]([-a-zA-Z_0-9\u{00b7}\u{0300}-\u{036f}\u{203f}-\u{2040}.]*[-a-zA-Z_0-9\u{00b7}\u{0300}-\u{036f}\u{203f}-\u{2040}])?:" ;
+
+pn_local : "([a-zA-Z_:0-9]|%[0-9a-fA-F]{2}|\\[-_~.!$&'()*+,;=/?#@%])(([a-zA-Z.:]|%[0-9a-fA-F]{2}|\\[-_~.!$&'()*+,;=/?#@%])*([a-zA-Z:]|%[0-9a-fA-F]{2}|\\[-_~.!$&'()*+,;=/?#@%]))?" ;
+
+digit : "[0-9]" ;
+
+digits
+	: digit digits
+	| digit
+	;
